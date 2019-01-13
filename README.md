@@ -33,6 +33,9 @@ import KeycloakStrategy from "@exlinc/keycloak-passport";
 ### Initialize
 
 ```javascript
+const AUTH_KEYCLOAK_CALLBACK = '/api/auth/keycloak/return';
+const kcUri = `${process.env.KEYCLOAK_HOST}/auth/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect`;
+
 // Register the strategy with passport
 passport.use(
   "keycloak",
@@ -42,7 +45,10 @@ passport.use(
       realm: process.env.KEYCLOAK_REALM,
       clientID: process.env.KEYCLOAK_CLIENT_ID,
       clientSecret: process.env.KEYCLOAK_CLIENT_SECRET,
-      callbackURL: `/api${AUTH_KEYCLOAK_CALLBACK}`
+      callbackURL: `${AUTH_KEYCLOAK_CALLBACK}`,
+      authorizationURL: `${kcUri}/auth`,
+      tokenURL: `${kcUri}/token`,
+      userInfoURL: `${kcUri}/userinfo`
     },
     (accessToken, refreshToken, profile, done) => {
       // This is called after a successful authentication has been completed
@@ -62,15 +68,49 @@ passport.use(
 ### Routes
 
 ```javascript
-router.get(
-  routes.AUTH_KEYCLOAK,
-  passport.authenticate("keycloak", DEFAULT_PASSPORT_OPTIONS)
+app.get('/api/auth/keycloak/',
+    passport.authenticate("keycloak", (err, user) => {
+        if (err || !user) {
+            console.log(err, user);
+            res.json({ err, user });
+            return next();
+        }
+    })
 );
-router.get(
-  routes.AUTH_KEYCLOAK_CALLBACK,
-  passport.authenticate("keycloak", DEFAULT_PASSPORT_OPTIONS),
-  AuthController.keyCloakSuccess
-);
+
+// req.body.username is undefined here, since here keycloak redirects to callback url on our website, and info is {}
+app.get('/api/auth/keycloak/return', (req, res, next) => {
+    passport.authenticate("keycloak", (err, user, info) => {
+        if (err || !user) {
+            res.json({ err, user });
+            return next();
+        }
+
+        req.logIn(user, err => {
+            if (err)
+                return next(err);
+
+            //redirect to home page
+            res.redirect('/api');
+            // or just show a json status report.
+            // return res.json({
+            //     message: 'req.logIn execution was successful in retrun uri',
+            //     user,
+            //     fullname: user.fullName,
+            //     email: user.email
+            // });
+        });
+    })(req, res, next);
+});
+
+app.get('/api',
+    (req, res) => {
+        if (req.isAuthenticated()) {
+            return res.json({ message: 'AUTH OK /api/', user: req.user });
+        }
+
+        return res.json({ message: 'NOT AUTH' });
+    });
 ```
 
 ## Compatability with next-auth

@@ -20,7 +20,7 @@ function Strategy(options, verify) {
   this.options = options;
   this._base = Object.getPrototypeOf(Strategy.prototype);
   this._base.constructor.call(this, this.options, verify);
-  this.name = 'Keycloak';
+  this.name = 'keycloak';
 }
 
 util.inherits(Strategy, OAuth2Strategy);
